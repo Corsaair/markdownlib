@@ -1,0 +1,11 @@
+import redbean.*;
+import shell.FileSystem;
+
+compile( "src/markdownlib.as" );
+
+if( FileSystem.exists( "markdownlib.abc" ) )
+{
+	FileSystem.removeFile( "markdownlib.abc" );
+}
+
+FileSystem.move( "src/markdownlib.abc", "markdownlib.abc" );
