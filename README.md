@@ -1,7 +1,7 @@
 markdownlib
 ===========
 
-An ActionScript 3.0 implementation of Markdown to HTML based on the
+An ActionScript 3.0 implementation of Markdown based on the
 original work of John Gruber.
 
 A straightforward (as much as possible) port of `Markdown.pl` v*1.0.1*.
@@ -26,6 +26,10 @@ I decided to go with the line-by-line port to first acclimate myself
 on how markdown internals are working and to produce a fairly
 compatible output.
 
+Also, I deliberately used a perl'ish coding style for the AS3 code organisation,
+instead of having a class with static methods you have a public function relying
+on internal functions (yes you can also do it this way in AS3).
+
 
 Install
 -------
@@ -45,8 +49,8 @@ in the Flash Player or AIR and so should work there too.
 
 My main focus being Redtamarin I did not provide a build to generate a SWC yet.
 
-Simply put it should work but I did not tested it and you are welcome to try it
-for yourself (contribution welcome).
+Simply put, it should work but I did not test it and you are welcome to try it
+for yourself (and contributions are welcome).
 
 
 Usage
