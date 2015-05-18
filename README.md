@@ -45,7 +45,7 @@ Flash Platform Compatibility
 ----------------------------
 
 The code does not rely on any particular API or features not available
-in the Flash Player or AIR and so should work there too.
+in the Flash Player or AIR runtime and so should work there too.
 
 My main focus being Redtamarin I did not provide a build to generate a SWC yet.
 
@@ -55,6 +55,8 @@ for yourself (and contributions are welcome).
 
 Usage
 -----
+
+**ABC library**
 
 ```as3
 var markdownlib:* = Domain.currentDomain.load( "markdownlib.abc" );
