@@ -912,9 +912,18 @@ package text.markdown
         //         ... type <code>`bar`</code> ...
         //
         var p:String = "";
+            //p += "(`+)";   // $1 = Opening run of `
+            //p += "(.+?)";  // $2 = The code block
+            //p += "(?<!`)";
+            //p += "\\1";     // Matching closer
+            //p += "(?!`)";
+            
             p += "(`+)";   // $1 = Opening run of `
             p += "(.+?)";  // $2 = The code block
-            p += "(?<!`)";
+            p += "(";
+            p += "  [^\\r]*?";
+            p += "  [^`]";     // work around lack of lookbehind from attacklab/showdownjs
+            p += ")";
             p += "\\1";     // Matching closer
             p += "(?!`)";
         
@@ -967,14 +976,30 @@ package text.markdown
     
     internal function _DoItalicsAndBold( txt:String ):String
     {
+        // <strong> must go first:
+        txt = txt.replace( / (\*\*|__) (?=\S) (.+?[*_]*) (?<=\S) \1 /gx , "<strong>$2</strong>" );
         
+        txt = txt.replace( / (\*|_) (?=\S) (.+?) (?<=\S) \1         /gx , "<em>$2</em>" );
         
         return txt;
     }
     
     internal function _DoBlockQuotes( txt:String ):String
     {
+        var p:String = "";
+            p += "(";                    // Wrap whole match in $1
+            p += "  (";
+            p += "    ^[ \\t]*>[ \\t]?"; // '>' at the start of a line
+            p += "    .+\\n";            // rest of the first line
+            p += "    (.+\\n)*";         // subsequent consecutive lines
+            p += "    \\n*";             // blanks
+            p += "  )+";
+            p += ")";
         
+        var re:RegExp = new RegExp( p, "gmx" );
+        txt = txt.replace( re, function( matching, m1 ) {
+            // TODO
+        } );
         
         return txt;
     }
