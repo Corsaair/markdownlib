@@ -628,7 +628,7 @@ package text.markdown
         txt = txt.replace( re2, function( matching, m1, m2, m3, m4, m5, m6 ) {
             var result:String = "";
             var whole_match:String = m1;
-            var alt_text:String   = m2;
+            var alt_text:String    = m2;
             var url:String         = m3;
             var title:String       = "";
             if( m6 && (m6 != "") )
@@ -859,15 +859,24 @@ package text.markdown
      */
     internal function _DoCodeBlocks( txt:String ):String
     {
+        /* Note:
+           \A  Match only at beginning of string
+           \A is not supported in AS3 regexp
+        
+           \Z  Match only at end of string, or before newline at the end
+           \Z is not supported in AS3 regexp
+        */
         var p:String = "";
-            p += "(?:\\n\\n|\\A)";
+            //p += "(?:\\n\\n|\\A)";
+            p += "(?:\\n\\n|^)";
             p += "(";                // $1 = the code block -- one or more lines, starting with a space/tab
             p += "  (?:";
             p += "    (?:[ ]{"+g_tab_width+"} | \\t)";  // Lines must start with a tab or a tab-width of spaces
             p += "    .*\\n+";
             p += "  )+";
             p += ")";
-            p += "((?=^[ ]{0,"+g_tab_width+"}\\S)|\\Z)"; // Lookahead for non-space at line-start, or end of doc
+            //p += "((?=^[ ]{0,"+g_tab_width+"}\\S)|\\Z)"; // Lookahead for non-space at line-start, or end of doc
+            p += "((?=^[ ]{0,"+g_tab_width+"}\\S)|$)"; // Lookahead for non-space at line-start, or end of doc
 
         var re:RegExp = new RegExp( p, "gmx" );
         txt = txt.replace( re, function( matching, m1 ) {
@@ -928,8 +937,8 @@ package text.markdown
             p += "(?!`)";
         
         var re:RegExp = new RegExp( p, "gx" );
-        txt = txt.replace( re, function( matching, m1, m2 ) {
-            var c:String = m2;
+        txt = txt.replace( re, function( matching, m1, m2, m3 ) {
+            var c:String = m2 + m3;
                 c = c.replace( /^[ \t]*/g , "" ); // leading whitespace
                 c = c.replace( /[ \t]*$/g , "" ); // trailing whitespace
                 c = _EncodeCode( c );
@@ -998,45 +1007,200 @@ package text.markdown
         
         var re:RegExp = new RegExp( p, "gmx" );
         txt = txt.replace( re, function( matching, m1 ) {
-            // TODO
+            var bq:String = m1;
+                bq = bq.replace( /^[ \t]*>[ \t]?/gm , "" ); // trim one level of quoting
+                bq = bq.replace( /^[ \t]+$/gm , "" );       // trim whitespace-only lines
+                bq = _RunBlockGamut( bq );                  // recurse
+            
+            bq = bq.replace( /^/g , "  " );
+            // These leading spaces screw with <pre> content, so we need to fix that:
+            var p2:String = "(\\s*<pre>.+?</pre>)";
+            var re2:RegExp = new RegExp( p2, "gx" ); 
+            bq = bq.replace( re2 , function( matching, m1 ) {
+                var pre:String = m1;
+                    pre = pre.replace( /^  /gm , "" );
+                return pre;
+            } );
+            
+            return "<blockquote>\n"+bq+"\n</blockquote>\n\n";
         } );
         
         return txt;
     }
     
+    /**
+     * @param txt string to process with html <p> tags.
+     */ 
     internal function _FormParagraphs( txt:String ):String
     {
+        // Strip leading and trailing lines:
+        txt = txt.replace( /\A\n+/g , "" );
+        txt = txt.replace( /\n+\z/g , "" );
         
+        var grafs:Array = txt.split( /\n{2,}/g );
+        var len:uint = grafs.length;
         
-        return txt;
+        // 
+        // Wrap <p> tags.
+        // 
+        var i:uint;
+        var v:String;
+        for( i = 0; i < len; i++ )
+        {
+            v = grafs[i];
+            if( !g_html_blocks[v] )
+            {
+                v  = _RunSpanGamut( v );
+                v  = v.replace( /^([ \t]*)/ , "<p>" );
+                v += "</p>";
+                grafs[i] = v;
+            }
+        }
+        
+        // 
+        // Unhashify HTML blocks
+        // 
+        var j:uint;
+        var v2:String;
+        for( j = 0; j < len; j++ )
+        {
+            v2 = grafs[j];
+            if( g_html_blocks[ v2 ] )
+            {
+                v2 = g_html_blocks[ v2 ];
+                grafs[j] = v2;
+            }
+        }
+        
+        return grafs.join( "\n\n" );
     }
     
+    /**
+     * Smart processing for ampersands and angle brackets that need to be encoded.
+     */
     internal function _EncodeAmpsAndAngles( txt:String ):String
     {
+        // Ampersand-encoding based entirely on Nat Irons's Amputator MT plugin:
+        // http://bumppo.net/projects/amputator/
+        txt = txt.replace( /&(?!#?[xX]?(?:[0-9a-fA-F]+|\w+);)/g , "&amp;" );
         
+        // Encode naked <'s
+        var p:String = "<(?![a-z/?\\$!])";
+        var re:RegExp = new RegExp( p, "gi" );
+        txt = txt.replace( re , "&lt;" );
         
         return txt;
     }
     
+    /**
+     * @param txt String.
+     * @return The string, with after processing the following backslash
+     *         escape sequences.
+     */ 
     internal function _EncodeBackslashEscapes( txt:String ):String
     {
-        
+        txt = txt.replace( / \\\\ /gx, g_escape_table["\\"] ); // Must process escaped backslashes first.
+        txt = txt.replace( / \\`  /gx, g_escape_table["`"] );
+        txt = txt.replace( / \\\* /gx, g_escape_table["*"] );
+        txt = txt.replace( / \\_  /gx, g_escape_table["_"] );
+        txt = txt.replace( / \\\{ /gx, g_escape_table["{"] );
+        txt = txt.replace( / \\\} /gx, g_escape_table["}"] );
+        txt = txt.replace( / \\\[ /gx, g_escape_table["["] );
+        txt = txt.replace( / \\\] /gx, g_escape_table["]"] );
+        txt = txt.replace( / \\\( /gx, g_escape_table["("] );
+        txt = txt.replace( / \\\) /gx, g_escape_table[")"] );
+        txt = txt.replace( / \\>  /gx, g_escape_table[">"] );
+        txt = txt.replace( / \\\# /gx, g_escape_table["#"] );
+        txt = txt.replace( / \\\+ /gx, g_escape_table["+"] );
+        txt = txt.replace( / \\\- /gx, g_escape_table["-"] );
+        txt = txt.replace( / \\\. /gx, g_escape_table["."] );
+        txt = txt.replace( / \\!  /gx, g_escape_table["!"] );
         
         return txt;
     }
     
     internal function _DoAutoLinks( txt:String ):String
     {
+        var p:String = "<((https?|ftp):[^'\">\\s]+)>";
+        var re:RegExp = new RegExp( p, "gi" );
+        txt = txt.replace( re, "<a href=\"$1\">$1</a>" );
         
+        // Email addresses: <address@domain.foo>
+        var p2:String = "";
+            p2 += "<";
+            p2 += "(?:mailto:)?";
+            p2 += "(";
+            p2 += "  [-.\\w]+";
+            p2 += "  \\@";
+            p2 += "  [-a-z0-9]+(\\.[-a-z0-9]+)*\\.[a-z]+";
+            p2 += ")";
+            p2 += ">";
+        
+        var re2:RegExp = new RegExp( p2, "gix" );
+        txt = txt.replace( re2, function( matching, m1 ) {
+            return _EncodeEmailAddress( _UnescapeSpecialChars( m1 ) );
+        } );
         
         return txt;
     }
     
-    internal function _EncodeEmailAddress( txt:String ):String
+    internal function _EncodeEmailAddress( addr:String ):String
     {
+        //
+        //	Input: an email address, e.g. "foo@example.com"
+        //
+        //	Output: the email address as a mailto link, with each character
+        //		of the address encoded as either a decimal or hex entity, in
+        //		the hopes of foiling most address harvesting spam bots. E.g.:
+        //
+        //	  <a href="&#x6D;&#97;&#105;&#108;&#x74;&#111;:&#102;&#111;&#111;&#64;&#101;
+        //       x&#x61;&#109;&#x70;&#108;&#x65;&#x2E;&#99;&#111;&#109;">&#102;&#111;&#111;
+        //       &#64;&#101;x&#x61;&#109;&#x70;&#108;&#x65;&#x2E;&#99;&#111;&#109;</a>
+        //
+        //	Based on a filter by Matthew Wickline, posted to the BBEdit-Talk
+        //	mailing list: <http://tinyurl.com/yu7ue>
+        //
+        var char2hex:Function = function( ch:String ):String
+        {
+            var hexDigits:String = "0123456789ABCDEF";
+            var dec:Number       = ch.charCodeAt( 0 );
+            return ( hexDigits.charAt(dec >> 4) + hexDigits.charAt(dec & 15) );
+        }
         
+        var encode:Array = [
+            function( ch:String ):String { return "&#"+ch.charCodeAt(0)+";"; },
+            function( ch:String ):String { return "&#x"+char2hex(ch)+";"; },
+            function( ch:String ):String { return ch; }
+        ];
         
-        return txt;
+        addr = "mailto:" + addr;
+        
+        addr = addr.replace( /./g , function( matching, m1 ) {
+            var char:String = m1;
+            if( char == "@" )
+            {
+                // this *must* be encoded. I insist.
+                char = encode[ Math.floor( Math.random()*2 ) ]( char );
+            }
+            else if( char != ":" )
+            {
+                // leave ':' alone (to spot mailto: later)
+                var r:Number = Math.random();
+                // roughly 10% raw, 45% hex, 45% dec
+                char = (
+                    r > .9  ?	encode[2](char)   :
+                    r > .45 ?	encode[1](char)   :
+                    encode[0](char)
+                );
+            }
+            
+            return char;
+        } );
+        
+        addr = "<a href=\"" + addr + "\">" + addr + "</a>";
+        addr = addr.replace( /">.+:/g , "\">" ); // strip the mailto: from the visible part
+        
+        return addr;
     }
     
     /**
